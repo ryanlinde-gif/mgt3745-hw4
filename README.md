@@ -3,9 +3,19 @@
 ![Status](https://img.shields.io/badge/worker-deployed-2e7d32)
 ![Module](https://img.shields.io/badge/MGT%203745-HW4-051E39)
 
-## What
+## Submission links
 
-HW3 repository: [ryanlinde-gif/mgt3745-hw3](https://github.com/ryanlinde-gif/mgt3745-hw3)
+| | |
+|---|---|
+| **Deployed Worker** | <https://mgt3745-hw4.ryanlindebusiness.workers.dev> |
+| **Worker, entries endpoint** | <https://mgt3745-hw4.ryanlindebusiness.workers.dev/entries> |
+| **This repository** | <https://github.com/ryanlinde-gif/mgt3745-hw4> |
+| **HW3 repository** | <https://github.com/ryanlinde-gif/mgt3745-hw3> |
+
+The entries endpoint returns the stored contacts as JSON and needs nothing
+installed. To see the page that consumes it, see [How to Run](#how-to-run).
+
+## What
 
 A high school soccer player records which college coaches she has emailed, at
 which school, on what date, and where each one stands, and the log flags anyone
