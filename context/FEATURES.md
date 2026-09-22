@@ -185,3 +185,61 @@ week's build does not attempt.
 
 Each row names the missing evidence and what would be needed to obtain it, per the
 CANNOT TEST definition in `SCAFFOLD_MANIFEST.md`.
+
+---
+
+# HW4: Data Leaves the Browser
+
+**Added 2026-09-22.** ADR-002 moved entries out of localStorage into a Cloudflare
+Worker backed by D1. The statements below are new; the verification section
+following them re-walks every statement against the deployed page.
+
+## Acceptance, added for the server
+
+- **E15.** IF a request body sent to `POST /entries` is not valid JSON, THEN THE SYSTEM SHALL reject it with status 400 and a message naming the problem.
+- **E16.** IF a submitted field contains database syntax, THEN THE SYSTEM SHALL store it as literal text and leave the schema unchanged.
+- **E17.** WHERE an entry has been saved, THE SYSTEM SHALL return it to any browser that requests it, not only to the browser that saved it.
+- **E18.** IF the server cannot be reached, THEN THE SYSTEM SHALL tell the user on the page and SHALL NOT raise an uncaught exception.
+
+**E12 is the statement the server-side validation rule traces to.** It was written
+in HW2 as a statement about the system, not about the form, and that distinction
+now earns its keep: the page can be bypassed entirely and `POST /entries` still
+refuses an entry with a missing field, naming the field.
+
+## Verification, HW4
+
+**Environment:** deployed Worker at `https://mgt3745-hw4.ryanlindebusiness.workers.dev`,
+page served over HTTP and loaded in Chrome on macOS.
+**Tested on:** 2026-09-22 · **Commit under test:** `92e6f32` and later
+
+### Statements carried from HW3, re-walked
+
+| Statement | HW3 verdict | HW4 verdict | Reason |
+|---|---|---|---|
+| E10 — save and display an entry | PASS | PASS | Saved through the page; the entry came back from `GET /entries` and rendered |
+| E11 — entries survive a reload | PASS | PASS | Now survives more than a reload; see E17 below |
+| E12 — empty field rejected, field named | PASS | PASS | Enforced twice: in the page, and again in the Worker where it cannot be bypassed |
+| E12 — 201-character boundary | **CANNOT TEST** | **PASS** | The HW3 row that had no evidence. `POST` with a 201-character coach name returned 400 "Coach name must be 200 characters or fewer."; 200 characters exactly returned 201. Both sides of the boundary tested |
+| E13 — flagged at 8 days, not at 6 | PASS | PASS | Recomputed on load from server data rather than from localStorage |
+| E14 — failed write preserves typed input | PASS | PASS | Now a network failure rather than a storage failure; see E18 |
+| E5 — coach, date, status visible | PASS | PASS | Unchanged |
+| E1–E4, E6–E9 | CANNOT TEST | CANNOT TEST | Still outside HW3/HW4 implementation scope; they specify the human Reality Check service, not this page |
+
+### New rows: the failure modes a server introduced
+
+| Criterion | Steps and input | Expected | Observed | Status |
+|---|---|---|---|---|
+| **E17 — survives a cleared cache / second client** | Save entries in one browser. Request `GET /entries` from a separate client that has never loaded the page | The same entries come back | `curl` against the deployed URL, with no browser and no site data at all, returned all three entries. The data is not in any browser | **PASS** |
+| **E18 — network unreachable** | Load the page with `?failSave`, which points it at a host that cannot resolve | A message on the page, no uncaught exception | Page showed "Could not load saved contacts. Could not reach the server. The list below may be incomplete." List rendered empty rather than stale. No uncaught exception. The browser logged `ERR_NAME_NOT_RESOLVED` at its own network layer, which page code cannot suppress and which is not the page throwing | **PASS** |
+| **E15 — server returns 400, bad JSON** | `POST /entries` with a body that is not JSON | 400 naming the problem | `body must be JSON`, HTTP 400 | **PASS** |
+| **E12 — server returns 400, missing field** | `POST /entries` with `coachName` absent, page bypassed entirely | 400 naming the missing field | `Coach name is required.`, HTTP 400 | **PASS** |
+| **E16 — submitted SQL is stored as data** | `POST` a coach name of `Robert'); DROP TABLE entries;--` | Stored as literal text, schema unchanged | Row saved with that exact string as the coach name. `GET /entries` still worked, table still present, other rows intact | **PASS** |
+| **Column mapping is correct** | `POST` four deliberately distinct values (`AAA-COACH`, `BBB-SCHOOL`, `2026-01-02`, `CCC-STATUS`) and read them back | Each value returns in its own field | Each landed in the right field. This is the check that reading the code could not give me, since a swapped pair would still run, still return 201, and still look fine | **PASS** |
+| **Server returns 500** | Attempted to force an internal error by sending a nested object where a string was expected | A readable 500 naming the cause | Could not produce one. The validation rule caught it first and returned 400. I do not currently know how to make the deployed Worker fail internally without editing it to fail on purpose, which would be testing a different program | **CANNOT TEST YET** |
+| **Second client writes to the same table** | Two clients submit entries at the same time | Undecided | Not attempted. ADR-002 names conflict behaviour as unresolved and lists a second writer as a revisit trigger. Deciding what should happen is prior to testing what does | **DEFERRED** (ADR-002) |
+| **Unauthenticated access** | Any client that knows the URL can read, write, and delete every entry | — | Confirmed while testing: every `curl` above ran with no credential of any kind. This is not a bug in the code, it is the consequence named second in ADR-002, and it is the reason ADR-003 is owed before real data goes in | **FAIL, by design and recorded** |
+
+The last row is a FAIL rather than a DEFERRED because nothing in this build is
+waiting on a decision I have not made. I know what is wrong, I know why, and I
+shipped it anyway for a course assignment holding three fictional coaches. Calling
+that DEFERRED would be using the word to make a known hole sound scheduled.

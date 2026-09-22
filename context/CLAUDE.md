@@ -24,17 +24,13 @@ for its type: write `contactEntries`, not `contactArray`; write
 `hasParentEmail`. Short conventional names for events and loop indexes are
 acceptable where the role is obvious.
 
-## File structure (browser-only, expires in Module 4)
+## File structure
 
-Put structure in `index.html`, presentation in `styles.css`, and behavior and data
-in `app.js`. Do not write `style` attributes in the HTML. Do not write JavaScript
-in the HTML beyond the single tag that loads `app.js`. Use lexical scope and do
-not create accidental globals; keep the starter's IIFE wrapper.
-
-**This section expires.** It assumes a browser-only page with no server, and stops
-being correct once a database and server-side code arrive in Module 4. If you are
-reading this and the repository contains server code, this section is out of date:
-say so instead of following it.
+Put browser structure in `index.html`, presentation in `styles.css`, and browser
+behavior in `app.js`. Put all server code in `worker.js`. Do not write `style`
+attributes in the HTML. Do not write JavaScript in the HTML beyond the tag that
+loads `app.js`. Use lexical scope and do not create accidental globals; keep the
+IIFE wrapper in both files.
 
 ## Comments
 
@@ -58,11 +54,22 @@ than only displayed. When a save fails, leave the user's typed text in the field
 The athlete logs contacts between practice and homework; silently discarding her
 input is the exact failure this feature exists to prevent.
 
-## No external dependencies
+## Server, SQL, and credentials
 
-Write plain HTML, CSS, and JavaScript. Do not add frameworks, CDN script tags, npm
-packages, or build steps. If a task appears to require one, stop and explain what
-it would require and why, rather than adding it.
+Never build SQL by concatenating strings. Use `prepare(...).bind(...)` so a user's
+value stays data and never becomes part of the instruction.
+
+Never write a credential, token, or key into any file in this repository,
+including comments and commit messages. A database id is an address, not a key.
+
+Never add a dependency without adding a row to `TOOLS.md` naming what it is
+trusted with, what it holds, and what leaving would cost. Do that before
+installing it.
+
+Handle failed responses on the page. Route network calls through the existing
+`request` helper so a failure returns a result instead of throwing, and show the
+user a sentence they can read. Never let a failure reach the console as an
+uncaught exception.
 
 ## Verification and honesty
 
@@ -85,10 +92,9 @@ guessing.
 
 `STANDARDS.md` rule 4 governs commit message format. It is **intentionally absent
 here** and lives in the prompt for tasks that actually commit. The reasoning is
-recorded under Split Test in `STANDARDS.md`: the rule is stable but rarely
-relevant, and a rule that applies to one task in ten while loading on all ten is
-distraction. This note exists so the difference between the two files is visible
-rather than silent, which `STANDARDS.md` requires.
+under Split Test in `STANDARDS.md`: the rule is stable but rarely relevant, and a
+rule that applies to one task in ten while loading on all ten is distraction. This
+note exists so the difference between the two files is visible rather than silent.
 
 ## Entry points
 

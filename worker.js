@@ -10,13 +10,34 @@
 //   status 400  the EARS "unwanted behavior" row, executable
 //   CORS        headers telling the browser this page is allowed to call this Worker
 
-// Session B uses "*" so every page works on the first try.
-// HW4 Craft credit: narrow this to the page's own origin once it is deployed.
-const CORS = {
-  "access-control-allow-origin": "*",
-  "access-control-allow-methods": "GET, POST, DELETE, OPTIONS",
-  "access-control-allow-headers": "content-type",
-};
+// The origins this page is actually served from. Narrowed from the Session B
+// wildcard, which let any website in the world call this Worker from a visitor's
+// browser using that visitor's network position.
+//
+// What this does NOT fix, and it matters: CORS is a rule browsers enforce on
+// pages. It is not access control. Anyone with curl can still read, write, and
+// delete every entry here, because there is no authentication at all. That is
+// consequence 2 in ADR-002 and it is ADR-003's problem. Narrowing CORS is worth
+// doing and is not the fix; recording that distinction is the point.
+//
+// If the Codespace is recreated its hostname changes and the first entry below
+// must be updated, or the page will load and every request will be blocked.
+const ALLOWED_ORIGINS = [
+  "https://humble-couscous-r7pwj4p5g6v7hwxvp-5500.app.github.dev",
+  "http://localhost:5501",
+];
+
+function corsHeaders(request) {
+  const origin = request.headers.get("origin");
+  return {
+    // An origin that is not on the list gets the first allowed origin echoed
+    // back, which the browser compares against its own and rejects.
+    "access-control-allow-origin": ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0],
+    "access-control-allow-methods": "GET, POST, DELETE, OPTIONS",
+    "access-control-allow-headers": "content-type",
+    "vary": "origin",
+  };
+}
 
 // The server enforces the same rule the page does, because a user can POST
 // straight to this URL and never load the page at all. FEATURES.md E12 is a
@@ -37,13 +58,14 @@ export default {
     try {
       return await handle(request, env);
     } catch (err) {
-      return new Response("server error: " + err.message, { status: 500, headers: CORS });
+      return new Response("server error: " + err.message, { status: 500, headers: corsHeaders(request) });
     }
   },
 };
 
 async function handle(request, env) {
   const url = new URL(request.url);
+  const CORS = corsHeaders(request);
 
   // Browsers send an OPTIONS "preflight" before a JSON POST from another
   // origin. Answer it with the CORS headers and nothing else.

@@ -4,8 +4,8 @@ Status: ACTIVE in Module 3.
 
 **Ryan Linde — MGT 3745 — HW3**
 
-Seven rules I follow on this project, adapted from the course baseline to the
-contact log feature. `CLAUDE.md` restates them as agent instructions.
+Ten rules I follow on this project, adapted from the course baseline to the
+contact log feature. Rules 8 to 10 arrived with HW4, when the data left the browser. `CLAUDE.md` restates them as agent instructions.
 
 **This file is normative.** If an adapter or `context/CLAUDE.md` conflicts with it,
 this file wins and the other copy is repaired. One rule below is deliberately
@@ -21,13 +21,20 @@ holds or does, not for its type: `contactEntries`, not `contactArray`;
 `hasParentEmail`. Short conventional names for events and indexes are fine when
 the role is obvious; arbitrary minimum name lengths are not a standard.
 
-**2. File structure, until Module 4.** Keep HTML, CSS, and JavaScript in
-`index.html`, `styles.css`, and `app.js`. No inline `style` attributes. No
-JavaScript in the HTML beyond the tag that loads `app.js`. Use lexical scope and
-do not create accidental globals; the starter's IIFE wrapper stays.
-**This rule assumes a browser-only page with no server and expires when Module 4
-introduces a database.** The expiry is in the rule's name because a reader who
-skims the paragraph still sees it.
+**2. File structure.** Keep browser HTML, CSS, and JavaScript in `index.html`,
+`styles.css`, and `app.js`. Keep all server code in `worker.js`. No inline `style`
+attributes. No JavaScript in the HTML beyond the tag that loads `app.js`. Use
+lexical scope and do not create accidental globals; the IIFE wrapper stays in both
+files.
+
+> **This rule expired and was rewritten on 2026-09-22.** The HW3 version read
+> "File structure, until Module 4" and said it assumed a browser-only page with no
+> server. Module 4 arrived and brought `worker.js`, so the old wording became an
+> instruction to put server code somewhere it does not belong. The Split Test below
+> predicted exactly this failure mode, named it clash on a delay, and the mitigation
+> was to put the expiry in the rule's name so it would be caught rather than
+> remembered. It worked: the name is what flagged it. The prediction and its outcome
+> are left in place rather than tidied away.
 
 **3. Comments.** Explain why the code exists, never what the line does. Delete any
 comment that paraphrases the line beneath it. Reserve comments for reasons that
@@ -52,11 +59,33 @@ text remains in the field. She is logging contacts between practice and homework
 and silently discarding her input is the failure mode this feature exists to
 prevent.
 
-**7. No external dependencies in this module.** Plain HTML, CSS, and JavaScript.
-No frameworks, CDN script tags, package installs, or build steps. I cannot yet
-audit a dependency, and a dependency I cannot audit is a trust decision I am not
-equipped to make. This rule expires when `TOOLS.md` activates in Module 4 and the
-trust boundary is drawn deliberately.
+**7. No dependency without a row in TOOLS.md.** The browser page still ships
+plain HTML, CSS, and JavaScript with no framework, no CDN tag, and no build step.
+The repository now has one npm dependency, `wrangler`, because deploying a
+Cloudflare Worker has no other supported path. Anything added after it needs a
+TOOLS.md row naming what it is trusted with before it is installed, not after.
+
+> **Rewritten on 2026-09-22.** The HW3 version banned dependencies outright and
+> said it would expire "when TOOLS.md activates in Module 4 and the trust boundary
+> is drawn deliberately." That is what happened. The ban is replaced by the
+> accounting it was standing in for.
+
+**8. User values reach SQL through `bind()`, never string concatenation.** Write
+`prepare("... VALUES (?)").bind(value)`. A value pasted into SQL text stops being
+data and becomes part of the instruction, which is the same defect as rule 5 and
+the same fix. This was tested, not assumed: a coach name of
+`Robert'); DROP TABLE entries;--` was stored as ordinary text and the table
+survived.
+
+**9. No credential in the repository.** No key, token, or password in any file,
+including comments and commit messages. A database id is an address, not a key, and
+may appear in `wrangler.toml`. Credentials live where `TOOLS.md` says they live.
+
+**10. A failed request is shown to the user on the page.** Every network call goes
+through one helper that returns a result rather than throwing, so a failure
+produces a sentence the user can read instead of an uncaught exception. The
+browser's own network log is not the page throwing and cannot be suppressed by
+page code; do not claim a silent console.
 
 ---
 

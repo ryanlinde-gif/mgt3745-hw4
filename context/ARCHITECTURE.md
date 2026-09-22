@@ -43,7 +43,7 @@ particular is scored as a free spreadsheet rather than as a paid CRM, because
 scoring an option at its worst is the same error as scoring your preferred option
 at its best.
 
-## Gate
+## Gate: HW3, the browser build
 
 Weights were assigned before any option was scored. Scores run 1 to 5, where 5 is
 always most favorable.
@@ -132,7 +132,7 @@ handles an empty field, or stores data somewhere I did not intend. Its 2 on
 maintenance is the lowest cell in the table: code I cannot read is code I cannot
 fix, so the maintenance cost is not the agent's time but my dependence on it.
 
-## Sensitivity Check
+## Sensitivity Check: HW3
 
 The gate favored Hand-built by 9 points over Existing-service. That is 7.5% of the
 scale, close enough that I tested whether the result survives disagreement.
@@ -171,12 +171,190 @@ That makes my own literacy the revisit trigger, not the calendar, and it means t
 week I spend hand-building is not a detour from the better option. It is the thing
 that unlocks it.
 
+---
+
+## Gate: HW4 rerun, where entries live
+
+Where should entries live now that they must survive a cleared cache? The same
+six criteria, scored against three doors: **Build** my own Cloudflare Worker and
+D1, **Buy** a hosted backend-as-a-service on its free tier, **Delegate** to an AI
+builder such as bolt.new that generates and hosts the backend.
+
+**Weights carried from HW3, with one change.** Switching cost rises from 2 to 3,
+because the reason it was low in HW3 was a known replacement arriving within
+weeks, that replacement has now happened, and this decision is the one expected
+to last.
+
+| Criterion | Weight | Build (Worker + D1) | Buy (hosted BaaS) | Delegate (AI builder hosts it) |
+|---|---:|---:|---:|---:|
+| Cost to start | 5 | 5 (25) | 5 (25) | 4 (20) |
+| Cost to maintain | 3 | 4 (12) | 5 (15) | 2 (6) |
+| Time to working | 4 | 4 (16) | 5 (20) | 5 (20) |
+| Inspectability | 5 | 5 (25) | 3 (15) | 2 (10) |
+| Switching cost | 3 | 4 (12) | 3 (9) | 2 (6) |
+| Fit to spec | 5 | 5 (25) | 3 (15) | 3 (15) |
+| **Weighted total** | **25** | **115** | **99** | **77** |
+
+Maximum possible is 125.
+
+### Notes on the scores that changed, and why
+
+**Time to working: Build rises from 2 to 4, and this is measured rather than
+guessed.** In HW3 I scored Build a 2 on this because I expected hand-building to
+be slow. Starting from no Cloudflare account at all, the whole path — sign up,
+`wrangler login`, create D1, apply the schema, deploy, confirm `[]` at the
+URL — took about forty minutes, and most of the delay was a `workers.dev`
+subdomain that had to exist before the first deploy would go through. A 2 would
+now be a number I had evidence against.
+
+**Switching cost is scored from experience, as the assignment requires.** I have
+now moved this data once. It cost one schema rewrite, one Worker, one afternoon,
+and no data loss, because there were three test rows and nothing real. That is
+the honest basis for Build's 4: the rows come out with `wrangler d1 export` and
+the Worker is about 120 lines of ordinary JavaScript with no framework to
+unpick. It is also the reason I am wary of my own number — moving three rows I
+did not care about is not the same experiment as moving a season of a real
+athlete's contacts, and the next move will be the expensive one.
+
+**Buy is scored at its most favorable honest reading**, as a Supabase- or
+Firebase-style free tier rather than a paid platform. It genuinely beats Build on
+maintenance and time, and its 3 on inspectability is real rather than punitive: I
+would write and read my own SQL, but the platform enforcing it is not something I
+can read. It loses on fit because E12 has to be expressed as vendor
+configuration — row policies or edge functions — rather than as the seven lines
+of `findFieldProblem` that currently do it.
+
+**Delegate's inspectability rises from 1 to 2.** In HW3 I scored it 1 because I
+could not read the output at all. That is now slightly less true: I can apply one
+concrete check, whether a user's value reaches SQL through `?` and `bind()` or is
+pasted into the string. One check is not an audit, which is why it is a 2 and not
+a 4.
+
+### Sensitivity check
+
+**Test 1: drop inspectability, the weight I am least sure of, from 5 to 3.**
+Build 105, Buy 93, Delegate 73. The order holds and the margin barely moves.
+
+**Test 2: the HW3 revisit trigger, retested.** ADR-001 said this decision would
+flip to Delegate once I could audit the code. Give Delegate a 5 on
+inspectability — better than I can currently justify — and it reaches 92, still
+23 behind Build. **The HW3 trigger no longer flips this decision**, and the
+reason is not that I learned to read code. It is that Build's weakest column in
+HW3, time to working, improved once I had actually done it. A trigger written
+in September was answered by evidence I did not have in September.
+
+---
+
+## ADR-002: Entries move from localStorage to Cloudflare D1
+
+**Title and date:** ADR-002 — Move contact entries out of the browser into a
+Cloudflare Worker backed by a D1 database. 2026-09-22.
+
+**Status:** Accepted. Deployed at `https://mgt3745-hw4.ryanlindebusiness.workers.dev`.
+
+**Supersedes:** ADR-001.
+
+**Door:** Build. My own Worker, my own schema, on Cloudflare's free tier.
+
+### Context
+
+ADR-001 named the condition that would end it, and the condition arrived.
+localStorage is per-browser and per-device: my sister's laptop and her phone were
+two different logs, the parent in `USERS.md` could never see the log at all, and
+clearing site data destroyed it silently. For a user whose stated problem is
+losing track of things, storage that can vanish without a message was the defect,
+not a rough edge.
+
+**The crossing, named in full, because a decision that does not name it is not
+recorded:**
+
+- **What data leaves the browser.** Every contact entry: coach name, school,
+  contact date, and follow-up status. Alongside it, and not by my choice,
+  Cloudflare receives the request metadata any host receives — IP address,
+  timestamp, user agent — and logs it by default.
+- **To which vendor.** Cloudflare, Inc. The database sits in region **ENAM**,
+  which Cloudflare selected when I ran `d1 create`. I was not asked and did not
+  choose.
+- **Under what terms.** The Cloudflare free tier, accepted by signing up.
+  100,000 requests per day. I have not read the terms in full, and writing that
+  down is more useful than implying I had.
+- **Who is accountable.** Me. Not Cloudflare, not the course, not the template.
+  If a coach's name or an athlete's activity is exposed, I am the person who
+  chose to put it there.
+
+### Decision
+
+I will store contact entries in a Cloudflare D1 database reached through a
+Cloudflare Worker I wrote, with the page calling `GET /entries`, `POST /entries`,
+and `DELETE /entries/:id`, because the weighted gate favoured Build at 115 against
+99 and 77, the result survived both sensitivity tests, and the criterion that
+decided it — being able to read and check the thing holding my users' data — is
+the one I am least willing to trade.
+
+### Alternatives considered
+
+**A hosted backend-as-a-service free tier.** Second at 99 and genuinely better on
+maintenance and time to working. Rejected because the validation rule that E12
+requires would become vendor configuration I cannot read as easily as the code it
+replaces, and because a platform I cannot inspect holding a minor's data is the
+specific trade this ADR exists to avoid.
+
+**An AI builder that generates and hosts the backend.** Third at 77. Fastest of
+the three and the only one I could not check. Rejected on the same criterion, and
+with less regret than in HW3, since the gap is now 38 points rather than 16.
+
+**Staying in localStorage.** Not scored, because it fails the requirement that
+produced this ADR: entries must survive a cleared cache.
+
+### Consequences
+
+**What becomes easier.** Entries survive a cleared cache, a new browser, and a
+different device. The parent's view becomes possible for the first time, since
+the data is no longer trapped in one person's browser. Validation now runs where
+it cannot be bypassed: the page can be skipped entirely and `POST /entries` still
+refuses an entry with a missing field.
+
+**What became harder, and this is the honest list.**
+
+1. **Offline use is gone outright.** The HW3 page worked on a plane. This one
+   shows "Could not reach the server." An athlete logging contacts on a bus with
+   no signal is worse off than she was a week ago. This is a straight regression
+   and I am accepting it.
+2. **Anyone who knows the URL can read and write every entry.** There is no
+   authentication. The Worker does not know who is calling, so a stranger can
+   `POST` to my table, read every coach my sister has contacted, or delete all of
+   it. In HW3 the data was trapped in one browser, which was a limitation and
+   also, accidentally, a protection. **That protection is gone and I have not
+   replaced it.** This is the most serious consequence of this decision.
+3. **Testing got harder.** HW3's failure mode could be produced by clicking
+   "Clear site data." Simulating a server returning 500 is not something I
+   currently know how to do, which is why one row of the verification table says
+   CANNOT TEST YET rather than PASS.
+4. **There is now a cost ceiling and a third party who can change it.** 100,000
+   requests a day is far more than this needs, but the number is Cloudflare's to
+   change, and so is the region, and so are the terms.
+
+### Revisit trigger
+
+Any one of these:
+
+- **Before this holds any real athlete's data**, consequence 2 must be fixed.
+  An unauthenticated public endpoint is acceptable for three fake coaches in a
+  course assignment and is not acceptable for my sister's actual recruiting
+  activity. That is ADR-003 and it is the next one I owe.
+- Cloudflare changes the free-tier limits, the region, or the terms.
+- A second user needs to write to the same table, at which point conflict
+  behaviour stops being deferrable.
+- Offline use stops being acceptable to the athlete.
+
+---
+
 ## ADR-001
 
 **Title and date:** ADR-001 — Adapt the course starter by hand and persist the
 contact log in browser localStorage. 2026-09-15.
 
-**Status:** Accepted.
+**Status:** Superseded by ADR-002 on 2026-09-22. Text below unedited; the reasoning was correct on the date it was written.
 
 **Door / concrete acquisition and execution choice:** Build (hand-built option).
 Concretely: fork the course starter's three root files, rewrite the note model as a
