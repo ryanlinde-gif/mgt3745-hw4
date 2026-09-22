@@ -90,12 +90,18 @@ async function handle(request, env) {
     }
 
     // ===================================================================
-    // TODO (Ryan): write the INSERT here.
-    // Ask Copilot for it, then read what it hands you before accepting.
-    // The values it must store: body.coachName, body.school,
-    // body.contactDate, body.status into coach_name, school, contact_date,
-    // status.
+    // INSERT the validated contact entry into the database.
+    // Values are mapped from camelCase request fields to the snake_case schema.
     // ===================================================================
+    await env.DB.prepare(
+      `INSERT INTO entries (coach_name, school, contact_date, status)
+       VALUES (?, ?, ?, ?)`
+    ).bind(
+      body.coachName,
+      body.school,
+      body.contactDate,
+      body.status
+    ).run();
 
     return new Response(null, { status: 201, headers: CORS });
   }
