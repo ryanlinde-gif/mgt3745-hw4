@@ -26,22 +26,31 @@ crossing it creates, and the four things it made worse are in
 
 ## See It Work
 
-![The contact log showing three saved entries after browser storage was completely cleared. The browser console shows localStorage.length returning 0 while the page still lists A. Rivera, T. Okafor, and M. Chen, with M. Chen flagged "Due for follow-up (8 days)" and a bold line reading "1 contact due for follow-up."](docs/see-it-work.png)
+**The page, in a Codespace browser.** Three saved coach contacts, the seven-day
+follow-up flag on the entry from 2026-09-14, and the count above the list.
 
-This is **E17**: *WHERE an entry has been saved, THE SYSTEM SHALL return it to any
-browser that requests it, not only to the browser that saved it.*
+![The coach contact log running in a browser. Three entries are listed: A. Rivera at Elon University contacted 2026-09-22, T. Okafor at Mercer University contacted 2026-09-16, and M. Chen at Furman University contacted 2026-09-14, which carries an orange badge reading "Due for follow-up (8 days)". Above the list, a bold line reads "1 contact due for follow-up." The entry form above is empty.](docs/see-it-work.png)
 
-The evidence is the empty `localStorage` next to the full list. In HW3 those three
-entries *were* the browser storage; clearing it destroyed them. Here the storage is
-empty, the page was reloaded from scratch, and the entries came back anyway,
-because they were never in the browser to begin with.
+**The same three entries, in a different browser on a different machine, which has
+never loaded that page.**
 
-The stronger version of the same proof needs no browser at all:
+![Raw JSON returned by the deployed Cloudflare Worker at mgt3745-hw4.ryanlindebusiness.workers.dev/entries, listing the same three entries for A. Rivera, T. Okafor, and M. Chen with matching schools, dates, and statuses.](docs/see-it-work-api.png)
 
-```
-$ curl -s https://mgt3745-hw4.ryanlindebusiness.workers.dev/entries
-[{"id":1,"coachName":"A. Rivera","school":"Elon University", ...
-```
+Together these two images are **E17**: *WHERE an entry has been saved, THE SYSTEM
+SHALL return it to any browser that requests it, not only to the browser that saved
+it.*
+
+The argument is in the pairing, not in either picture. The second browser has no
+site data for the first, shares no storage with it, and is not even on the same
+machine — it is simply asking the server, with no credential, and getting the same
+three rows. **In HW3 this pair of screenshots could not have existed.** The entries
+*were* the browser storage; a second browser would have shown an empty list, and
+clearing site data would have destroyed them with no warning. That limitation is
+what ADR-001 named as its own defect and what ADR-002 was written to end.
+
+The second image also shows the consequence, since it is the same proof read the
+other way: that request needed no login. Anyone with the URL gets the same
+response. See the FAIL row in Status.
 
 ```mermaid
 flowchart LR
@@ -57,7 +66,7 @@ flowchart LR
 
 Validation runs twice on purpose. The page checks so the user gets an instant
 answer; the Worker checks again because the page can be skipped entirely and
-`POST /entries` is reachable from anything.
+`POST /entries` is reachable from anything, as the second screenshot demonstrates.
 
 ## How to Run
 
