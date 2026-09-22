@@ -14,7 +14,7 @@
 // HW4 Craft credit: narrow this to the page's own origin once it is deployed.
 const CORS = {
   "access-control-allow-origin": "*",
-  "access-control-allow-methods": "GET, POST, OPTIONS",
+  "access-control-allow-methods": "GET, POST, DELETE, OPTIONS",
   "access-control-allow-headers": "content-type",
 };
 
@@ -104,6 +104,18 @@ async function handle(request, env) {
     ).run();
 
     return new Response(null, { status: 201, headers: CORS });
+  }
+
+  // The HW3 page has a Delete button. Without this route it would call an
+  // endpoint that does not exist and the row would reappear on reload, so the
+  // feature is kept rather than quietly dropped when the data moved.
+  if (request.method === "DELETE" && url.pathname.startsWith("/entries/")) {
+    const id = Number(url.pathname.slice("/entries/".length));
+    if (!Number.isInteger(id) || id <= 0) {
+      return new Response("entry id must be a positive whole number", { status: 400, headers: CORS });
+    }
+    await env.DB.prepare("DELETE FROM entries WHERE id = ?").bind(id).run();
+    return new Response(null, { status: 204, headers: CORS });
   }
 
   return new Response("not found", { status: 404, headers: CORS });

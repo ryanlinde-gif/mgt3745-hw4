@@ -1,7 +1,16 @@
 (() => {
   'use strict';
 
-  const storageKey = 'mgt3745.contacts.v1';
+  // Where the data lives as of ADR-002. Entries no longer live in this browser;
+  // this page is now a client for a server it does not own.
+  const API = "https://mgt3745-hw4.ryanlindebusiness.workers.dev";
+
+  // The HW3 switch simulated a failed localStorage write. There is no local
+  // write any more, so it now points the page at a host that cannot resolve,
+  // which is the closest honest stand-in for "the network is down".
+  const simulateNetworkFailure = new URLSearchParams(window.location.search).has('failSave');
+  const apiBase = simulateNetworkFailure ? "https://mgt3745-hw4.invalid" : API;
+
   // E13: the seven-day threshold comes from the day 3 / day 7 follow-up cadence
   // already committed to in FEATURES.md E8, not from a fresh guess.
   const followUpDays = 7;
@@ -15,10 +24,8 @@
   const contactList = document.querySelector('#contact-list');
   const entryError = document.querySelector('#entry-error');
   const saveStatus = document.querySelector('#save-status');
-  const emptyState = document.querySelector('#empty-state');const overdueCount = document.querySelector('#overdue-count');
-
-  // The query switch enables a repeatable classroom failure without filling real storage.
-  const simulateFailedSave = new URLSearchParams(window.location.search).has('failSave');
+  const emptyState = document.querySelector('#empty-state');
+  const overdueCount = document.querySelector('#overdue-count');
 
   const requiredFields = [
     { key: 'coachName', label: 'Coach name', element: coachNameInput },
@@ -26,42 +33,61 @@
     { key: 'contactDate', label: 'Date contacted', element: contactDateInput }
   ];
 
-  let contactEntries = loadContacts();
+  let contactEntries = [];
 
-  function loadContacts() {
+  // Every network call in this file goes through here, so a failure has exactly
+  // one place to be handled and can never reach the console as an exception.
+  async function request(path, options) {
     try {
-      const storedText = window.localStorage.getItem(storageKey);
-      const parsed = storedText === null ? [] : JSON.parse(storedText);
-      if (!Array.isArray(parsed) || !parsed.every(isValidEntry)) {
-        throw new Error('Unexpected stored data');
+      const response = await fetch(apiBase + path, options);
+      if (!response.ok) {
+        const detail = await response.text();
+        return { ok: false, message: detail || `Server returned ${response.status}.` };
       }
-      return parsed;
+      return { ok: true, response };
     } catch {
-      saveStatus.textContent = 'Saved contacts could not be read. Original storage was left unchanged. A successful new save will replace it.';
+      return { ok: false, message: 'Could not reach the server.' };
+    }
+  }
+
+  function showError(message) {
+    entryError.textContent = message;
+    saveStatus.textContent = '';
+  }
+
+  async function loadContacts() {
+    const result = await request('/entries');
+    if (!result.ok) {
+      showError('Could not load saved contacts. ' + result.message + ' The list below may be incomplete.');
       return [];
     }
+    return result.response.json();
   }
 
-  function isValidEntry(entry) {
-    return entry !== null
-      && typeof entry === 'object'
-      && typeof entry.coachName === 'string'
-      && typeof entry.school === 'string'
-      && typeof entry.contactDate === 'string'
-      && typeof entry.status === 'string';
-  }
-
-  function saveContacts(nextContacts) {
-    try {
-      if (simulateFailedSave) throw new Error('Simulated write failure');
-      // Persist the proposed state before changing the visible state or clearing input.
-      window.localStorage.setItem(storageKey, JSON.stringify(nextContacts));
-      return true;
-    } catch {
-      entryError.textContent = 'Could not save. Your entry is still here. Try again when storage is available.';
-      saveStatus.textContent = '';
+  async function saveContact(candidate) {
+    // Persist before changing anything visible, exactly as the localStorage
+    // version did. A failed save must leave the list and the form untouched.
+    const result = await request('/entries', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(candidate)
+    });
+    if (!result.ok) {
+      // Only the save path can promise the typed entry survived, because only
+      // the save path had something typed to preserve.
+      showError(result.message + ' Your entry is still here. Try again.');
       return false;
     }
+    return true;
+  }
+
+  async function deleteContact(id) {
+    const result = await request('/entries/' + id, { method: 'DELETE' });
+    if (!result.ok) {
+      showError(result.message);
+      return false;
+    }
+    return true;
   }
 
   function daysSinceContact(isoDate) {
@@ -105,6 +131,7 @@
   function renderContactLog() {
     contactList.replaceChildren();
     emptyState.hidden = contactEntries.length > 0;
+
     const overdueEntries = contactEntries.filter(isOverdue);
     if (overdueEntries.length === 0) {
       overdueCount.textContent = '';
@@ -118,12 +145,10 @@
       const listItem = document.createElement('li');
 
       const summary = document.createElement('span');
-      const overdue = isOverdue(entry);
       summary.textContent = `${entry.coachName} — ${entry.school} — contacted ${entry.contactDate} — ${entry.status}`;
-
       listItem.append(summary);
 
-      if (overdue) {
+      if (isOverdue(entry)) {
         const flag = document.createElement('span');
         flag.className = 'overdue-flag';
         flag.textContent = `Due for follow-up (${daysSinceContact(entry.contactDate)} days)`;
@@ -134,10 +159,11 @@
       deleteButton.type = 'button';
       deleteButton.textContent = 'Delete';
       deleteButton.setAttribute('aria-label', `Delete contact ${index + 1}: ${entry.coachName} at ${entry.school}`);
-      deleteButton.addEventListener('click', () => {
-        const nextContacts = contactEntries.filter((item, itemIndex) => itemIndex !== index);
-        if (!saveContacts(nextContacts)) return;
-        contactEntries = nextContacts;
+      deleteButton.addEventListener('click', async () => {
+        deleteButton.disabled = true;
+        const deleted = await deleteContact(entry.id);
+        if (!deleted) { deleteButton.disabled = false; return; }
+        contactEntries = await loadContacts();
         entryError.textContent = '';
         renderContactLog();
         saveStatus.textContent = 'Contact deleted.';
@@ -149,7 +175,7 @@
     });
   }
 
-  contactForm.addEventListener('submit', event => {
+  contactForm.addEventListener('submit', async event => {
     event.preventDefault();
 
     const candidate = {
@@ -162,27 +188,31 @@
     const problem = findFieldProblem(candidate);
     if (problem !== null) {
       clearFieldErrors();
-      entryError.textContent = problem.message;
+      showError(problem.message);
       problem.element.setAttribute('aria-invalid', 'true');
-      saveStatus.textContent = '';
       problem.element.focus();
       return;
     }
 
     clearFieldErrors();
     entryError.textContent = '';
+    saveStatus.textContent = 'Saving…';
 
-    const nextContacts = [...contactEntries, candidate];
-    // A failed save must leave the typed entry in the form, so the fields are
-    // only cleared after storage has confirmed the write.
-    if (!saveContacts(nextContacts)) return;
+    // The form is only cleared after the server confirms the write, so a failed
+    // request leaves the typed entry where the athlete can retry it.
+    const saved = await saveContact(candidate);
+    if (!saved) return;
 
-    contactEntries = nextContacts;
+    contactEntries = await loadContacts();
     renderContactLog();
     contactForm.reset();
     coachNameInput.focus();
-    saveStatus.textContent = 'Contact saved in this browser.';
+    saveStatus.textContent = 'Contact saved to the server.';
   });
 
-  renderContactLog();
+  // Initial load. The page starts empty and fills in when the server answers.
+  (async () => {
+    contactEntries = await loadContacts();
+    renderContactLog();
+  })();
 })();
