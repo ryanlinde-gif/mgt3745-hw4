@@ -157,4 +157,4 @@ have not verified which instruction file it discovered, and this repository has 
 What I can report is the output: the code it produced satisfies STANDARDS.md rule 8
 on `bind()`, and I did not have to correct it.
 
-**Hours spent:** [REPLACE WITH A NUMBER]
+**Hours spent:** About 2.
